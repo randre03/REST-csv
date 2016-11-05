@@ -1,8 +1,11 @@
 (ns rest-csv.core
-  (:require [ring.adapter.jetty :as jetty]
+  (:require [clojure.data.csv :as csv]
+            [clojure.java.io :as io]
+            [ring.adapter.jetty :as jetty]
             [hugsql.core :as hugsql]))
 
 (def db (System/getenv "DATABASE_URL"))
+
 (def db "jdbc:postgresql://localhost/restcsv")
 
 (hugsql/def-db-fns "rest_csv/database.sql")
@@ -34,6 +37,17 @@
   (:id (create-cell* db {:row-id row-id
                          :key key
                          :value value})))
+
+(defn read-and-insert [db upload-id rdr]
+  (let [[header & rows] (csv/read-csv rdr)]
+    (doseq [row rows]
+      (let [row-id (create-row db upload-id)]
+        (doseq [[key value] (map vector header row)]
+          (create-cell db row-id key value))))))
+
+(defn do-upload [db endpoint-id rdr]
+  (let [upload-id (create-upload db endpoint-id)]
+    (read-and-insert db upload-id rdr)))
 
 (defn app [req]
   {:headers {}
